@@ -300,8 +300,9 @@ list_of_net_lvalues: hierarchical_net_identifier constant_range_expression.opt {
   $$ = { naja::verilog::RangeIdentifier($1, $2) };
 }
 | list_of_net_lvalues ',' hierarchical_net_identifier constant_range_expression.opt {
-  $1.push_back(naja::verilog::RangeIdentifier($3, $4));
-  $$ = $1;
+  // Move, don't copy: avoids O(K^2) growth on long lvalue lists.
+  $$ = std::move($1);
+  $$.push_back(naja::verilog::RangeIdentifier(std::move($3), $4));
 }
 
 net_assignment: net_lvalue '=' expression {
@@ -335,8 +336,11 @@ list_of_identifiers
   $$ = { $1 };
 }
 | list_of_identifiers ',' net_identifier {
-  $1.push_back($3);
-  $$ = $1;
+  // Move, don't copy: with a copying `$$ = $1` a K-identifier declaration
+  // list costs O(K^2) vector copies (flat synthesis netlists routinely
+  // declare tens of thousands of nets in one comma-separated statement).
+  $$ = std::move($1);
+  $$.push_back(std::move($3));
 }
 
 net_identifier: identifier { $$ = naja::verilog::Identifier($1); }
@@ -370,8 +374,9 @@ hierarchical_identifier
   $$ = { $1 };
 }
 | hierarchical_identifier '.' identifier {
-  $1.push_back($3);
-  $$ = $1;
+  // Move, don't copy: avoids O(K^2) growth on deep hierarchical paths.
+  $$ = std::move($1);
+  $$.push_back(std::move($3));
 }
 
 //only numeric values (one bit) [4] or [4:5] are supported
@@ -393,8 +398,9 @@ expression {
   $$ = { $1 };
 }
 | list_of_expressions ',' expression {
-  $1.push_back($3);
-  $$ = $1;
+  // Move, don't copy: avoids O(K^2) growth on wide concatenations.
+  $$ = std::move($1);
+  $$.push_back(std::move($3));
 }
 
 concatenation: '{' list_of_expressions '}' { $$ = $2; }
