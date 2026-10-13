@@ -105,15 +105,58 @@ TEST(NajaVerilogTestLiterals, unbasedUnsizedIsLowerCased) {
   EXPECT_EQ("'z", std::get<Number>(u0.connections_[1].expression_.value_).getString());
 }
 
-TEST(NajaVerilogTestLiterals, badReplicationCount) {
-  for (const char* connection : {".A({0{1'b1}})", ".A({n{1'b1}})"}) {
-    VerilogConstructorTest constructor;
-    try {
-      parseText(constructor, oneInstance(connection));
-      FAIL() << connection << " did not throw";
-    } catch (const VerilogException& e) {
-      EXPECT_NE(std::string::npos, std::string(e.what()).find("replication count"))
-          << connection << ": " << e.what();
-    }
+namespace {
+
+// Parses a single connection and returns its expression.
+Expression connectionOf(VerilogConstructorTest& constructor, const std::string& connection) {
+  parseText(constructor, oneInstance(connection));
+  const auto& u0 = dynamic_cast<VerilogConstructorTest::ModuleInstance&>(
+      *constructor.modules_[0]->instances_[0]);
+  return u0.connections_[0].expression_;
+}
+
+// Expects the parse to throw a VerilogException whose text contains `word`.
+void expectParseError(const std::string& connection, const std::string& word) {
+  VerilogConstructorTest constructor;
+  try {
+    parseText(constructor, oneInstance(connection));
+    FAIL() << connection << " did not throw";
+  } catch (const VerilogException& e) {
+    EXPECT_NE(std::string::npos, std::string(e.what()).find(word))
+        << connection << ": " << e.what();
   }
+}
+
+}
+
+TEST(NajaVerilogTestLiterals, zeroCountInsideConcatenationIsDropped) {
+  VerilogConstructorTest constructor;
+  const auto expression = connectionOf(constructor, ".A({1'b1, {0{1'b0}}})");
+  const auto& operands = asConcat(expression).expressions_;
+  ASSERT_EQ(1, operands.size());
+  EXPECT_EQ("1'b1", std::get<Number>(operands[0].value_).getString());
+}
+
+TEST(NajaVerilogTestLiterals, basedAndSignedCounts) {
+  VerilogConstructorTest constructor;
+  EXPECT_EQ(3, asConcat(connectionOf(constructor, ".A({4'd3{1'b1}})")).expressions_.size());
+  VerilogConstructorTest hex;
+  EXPECT_EQ(2, asConcat(connectionOf(hex, ".A({'h2{1'b1}})")).expressions_.size());
+  VerilogConstructorTest plus;
+  EXPECT_EQ(2, asConcat(connectionOf(plus, ".A({+2{1'b0}})")).expressions_.size());
+  VerilogConstructorTest binary;
+  EXPECT_EQ(5, asConcat(connectionOf(binary, ".A({3'b1_01{1'b0}})")).expressions_.size());
+}
+
+TEST(NajaVerilogTestLiterals, badReplicationCount) {
+  // Zero on its own has no bits; the same for a concatenation of only zero-size operands.
+  expectParseError(".A({0{1'b1}})", "replication");
+  expectParseError(".A({{0{1'b1}}, {0{1'b0}}})", "positive size");
+  // Negative, non-constant, x/z and unbased counts have no usable value.
+  expectParseError(".A({-1{1'b1}})", "replication count");
+  expectParseError(".A({n{1'b1}})", "replication count");
+  expectParseError(".A({4'bx1{1'b1}})", "replication count");
+  expectParseError(".A({4'hz{1'b1}})", "replication count");
+  expectParseError(".A({'1{1'b1}})", "replication count");
+  expectParseError(".A({4'sd8{1'b1}})", "replication count");
 }

@@ -57,6 +57,77 @@
 
 size_t portIndex = 0;
 
+static bool isZeroSize(const naja::verilog::Expression& expression) {
+  if (expression.value_.index() != naja::verilog::Expression::CONCATENATION) {
+    return false;
+  }
+  const auto& concatenation =
+    std::get<naja::verilog::Expression::CONCATENATION>(expression.value_);
+  return concatenation and concatenation->expressions_.empty();
+}
+
+// Returns the value of a replication count, which must be a number literal
+// with a known, non-negative value (IEEE 1800-2023 11.4.12.1). naja evaluates
+// no constant expressions, so parameters and arithmetic are rejected.
+static size_t getReplicationCount(
+  const naja::verilog::Expression& expression,
+  int line,
+  int column) {
+  const auto fail = [&](const std::string& why) {
+    std::ostringstream reason;
+    reason << "Parser error: replication count must be a non-negative constant "
+      << "number literal with known digits; '" << expression.getString()
+      << "' is not: " << why << " at line " << line << " col " << column;
+    throw naja::verilog::VerilogException(reason.str());
+  };
+  if (expression.value_.index() != naja::verilog::Expression::NUMBER) {
+    fail("only number literals are supported");
+  }
+  const auto& number = std::get<naja::verilog::Number>(expression.value_);
+  unsigned long long value = 0;
+  switch (number.value_.index()) {
+    case naja::verilog::Number::UNSIGNED:
+      value = std::get<naja::verilog::Number::UNSIGNED>(number.value_);
+      break;
+    case naja::verilog::Number::BASED: {
+      const auto& based = std::get<naja::verilog::Number::BASED>(number.value_);
+      std::string digits;
+      for (char c: based.digits_) {
+        if (c != '_') { digits += c; }
+      }
+      int base = 10;
+      switch (based.base_) {
+        case naja::verilog::BasedNumber::BINARY: base = 2; break;
+        case naja::verilog::BasedNumber::OCTAL: base = 8; break;
+        case naja::verilog::BasedNumber::HEX: base = 16; break;
+        case naja::verilog::BasedNumber::DECIMAL: base = 10; break;
+      }
+      size_t parsed = 0;
+      try {
+        value = std::stoull(digits, &parsed, base);
+      } catch (const std::exception&) {
+        fail("digits are not a representable integer (x, z and ? are not allowed)");
+      }
+      if (parsed != digits.size()) {
+        fail("digits are not a representable integer (x, z and ? are not allowed)");
+      }
+      // A signed literal whose top bit is set is negative.
+      const size_t width = based.hasSize_ ? based.size_ : 32;
+      if (based.signed_ and width >= 1 and width <= 64
+          and ((value >> (width - 1)) & 1) and number.sign_) {
+        fail("the value is negative");
+      }
+      break;
+    }
+    default:
+      fail("an unbased unsized literal has no value here");
+  }
+  if (not number.sign_ and value != 0) {
+    fail("the value is negative");
+  }
+  return static_cast<size_t>(value);
+}
+
 static naja::verilog::Number generateNumber(
   bool hasSize,
   const std::string& size,
@@ -189,10 +260,13 @@ static naja::verilog::Number generateNumber(
 %type<std::string> unary_operator;
 %type<naja::verilog::Expression> primary;
 %type<naja::verilog::Expression> expression;
+%type<naja::verilog::Expression> list_item;
+%type<naja::verilog::Expression> replication_count;
 %type<naja::verilog::Expression> expression.opt;
 %type<naja::verilog::Expression> mintypmax_expression;
 %type<naja::verilog::Expression> mintypmax_expression.opt;
 %type<naja::verilog::Concatenation::Expressions> concatenation;
+%type<naja::verilog::Concatenation::Expressions> replication;
 %type<naja::verilog::Concatenation::Expressions> list_of_expressions; 
 %type<naja::verilog::ConstantExpression> attr_spec_value;
 %type<naja::verilog::Attribute> attr_spec;
@@ -226,6 +300,7 @@ primary
   $$.valid_ = true; $$.value_ = naja::verilog::RangeIdentifier($1, $2); }
 | STRING_TK { $$.valid_ = true; $$.value_ = $1.substr(1, $1.size()-2); } 
 | concatenation { $$.valid_ = true; $$.value_ = std::make_shared<naja::verilog::Concatenation>($1); }
+| replication { $$.valid_ = true; $$.value_ = std::make_shared<naja::verilog::Concatenation>($1); }
 ;
 
 constant_primary
@@ -413,44 +488,71 @@ constant_range_expression.opt: %empty { $$.valid_ = false; }
   $$ = $1;
 }
 
+list_item: primary { $$ = $1; }
+
 list_of_expressions:
-expression {
+list_item {
   $$ = { $1 };
 }
-| list_of_expressions ',' expression {
+| list_of_expressions ',' list_item {
   // Move, don't copy: avoids O(K^2) growth on wide concatenations.
   $$ = std::move($1);
   $$.push_back(std::move($3));
 }
 
-concatenation: '{' list_of_expressions '}' { $$ = $2; }
-// Replication (IEEE 1800-2023 11.4.12.1) is expanded here into `count` copies
-// of the inner operands, so consumers see only ordinary concatenations.
-// The standard also allows a zero count inside a concatenation that has a
-// positive-size operand; this parser rejects it, as it does any count it
-// cannot evaluate to a positive integer literal.
-| '{' expression concatenation '}' {
-  if ($2.value_.index() != naja::verilog::Expression::NUMBER
-      or std::get<naja::verilog::Number>($2.value_).value_.index()
-         != naja::verilog::Number::UNSIGNED
-      or std::get<naja::verilog::Number::UNSIGNED>(
-           std::get<naja::verilog::Number>($2.value_).value_) == 0) {
+// A zero-size operand (a replication with count zero) is dropped from the
+// concatenation that holds it; a concatenation left with no bits is an error
+// (IEEE 1800-2023 11.4.12.1).
+concatenation: '{' list_of_expressions '}' {
+  $$.clear();
+  for (auto& operand: $2) {
+    if (not isZeroSize(operand)) {
+      $$.push_back(std::move(operand));
+    }
+  }
+  if ($$.empty()) {
     std::ostringstream reason;
-    reason << "Parser error: replication count must be a positive constant "
-      << "integer literal, got '" << $2.getString() << "'"
-      << " at line " << @$.begin.line << " col " << @$.begin.column;
+    reason << "Parser error: concatenation has no operand of positive size "
+      << "(a replication count of zero contributes no bits) at line "
+      << @$.begin.line << " col " << @$.begin.column;
     throw naja::verilog::VerilogException(reason.str());
   }
-  const unsigned count = std::get<naja::verilog::Number::UNSIGNED>(
-    std::get<naja::verilog::Number>($2.value_).value_);
+}
+
+// Replication is expanded here into `count` copies of the inner operands, so
+// consumers see only ordinary concatenations. A zero count yields no operands;
+// `primary` and `list_item` decide whether that is legal where it appears.
+replication: '{' replication_count concatenation '}' {
+  const size_t count = getReplicationCount($2, @$.begin.line, @$.begin.column);
   $$.clear();
   $$.reserve($3.size() * count);
-  for (unsigned i = 0; i < count; ++i) {
+  for (size_t i = 0; i < count; ++i) {
     $$.insert($$.end(), $3.begin(), $3.end());
   }
 }
 
-expression: primary { $$ = $1; }
+replication_count
+: expression { $$ = $1; }
+| unary_operator number {
+  $$.valid_ = true;
+  auto number = $2;
+  if ($1 == "-") { number.sign_ = false; }
+  $$.value_ = number;
+}
+
+// A bare replication with count zero has no bits; it is legal only as an
+// operand of a concatenation, which is `list_item`.
+expression: primary {
+  if (isZeroSize($1)) {
+    std::ostringstream reason;
+    reason << "Parser error: replication count is zero, so the expression has "
+      << "no bits; a zero count is legal only inside a concatenation that has "
+      << "an operand of positive size, at line "
+      << @$.begin.line << " col " << @$.begin.column;
+    throw naja::verilog::VerilogException(reason.str());
+  }
+  $$ = $1;
+}
 
 expression.opt: %empty { $$.valid_ = false; } | expression { $$ = $1; }
 
