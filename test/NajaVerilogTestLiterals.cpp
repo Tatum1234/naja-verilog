@@ -159,4 +159,13 @@ TEST(NajaVerilogTestLiterals, badReplicationCount) {
   expectParseError(".A({4'hz{1'b1}})", "replication count");
   expectParseError(".A({'1{1'b1}})", "replication count");
   expectParseError(".A({4'sd8{1'b1}})", "replication count");
+  // A radix prefix is not a digit: stoull would otherwise take 0x1 as 1.
+  expectParseError(".A({8'h0x1{1'b1}})", "replication count");
+  expectParseError(".A({4'b0b1{1'b1}})", "replication count");
+  expectParseError(".A({4'b102{1'b1}})", "replication count");
+  expectParseError(".A({4'o8{1'b1}})", "replication count");
+  // Past the size cap, including a decimal that does not fit 32 bits.
+  expectParseError(".A({4294967296{1'b1}})", "replication count");
+  expectParseError(".A({99999999999999999999999{1'b1}})", "replication count");
+  expectParseError(".A({1048577{1'b1}})", "1048576");
 }

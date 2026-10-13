@@ -41,6 +41,7 @@
 %code{
 
 #include <iostream>
+#include <limits>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -65,6 +66,10 @@ static bool isZeroSize(const naja::verilog::Expression& expression) {
     std::get<naja::verilog::Expression::CONCATENATION>(expression.value_);
   return concatenation and concatenation->expressions_.empty();
 }
+
+// Largest replication count accepted; a larger one would reserve memory for an
+// expansion no netlist port connection needs.
+static constexpr unsigned long long kMaxReplicationCount = 1ull << 20;
 
 // Returns the value of a replication count, which must be a number literal
 // with a known, non-negative value (IEEE 1800-2023 11.4.12.1). naja evaluates
@@ -102,14 +107,17 @@ static size_t getReplicationCount(
         case naja::verilog::BasedNumber::HEX: base = 16; break;
         case naja::verilog::BasedNumber::DECIMAL: base = 10; break;
       }
-      size_t parsed = 0;
-      try {
-        value = std::stoull(digits, &parsed, base);
-      } catch (const std::exception&) {
-        fail("digits are not a representable integer (x, z and ? are not allowed)");
+      // Every digit must belong to the base: stoull would otherwise accept a
+      // "0x" or "0b" prefix and a trailing run of non-digits would be ignored.
+      const char* const alphabet = base == 2 ? "01" : base == 8 ? "01234567"
+        : base == 10 ? "0123456789" : "0123456789abcdefABCDEF";
+      if (digits.empty() or digits.find_first_not_of(alphabet) != std::string::npos) {
+        fail("digits are not a representable integer (x, z, ? and digits outside the base are not allowed)");
       }
-      if (parsed != digits.size()) {
-        fail("digits are not a representable integer (x, z and ? are not allowed)");
+      try {
+        value = std::stoull(digits, nullptr, base);
+      } catch (const std::exception&) {
+        value = std::numeric_limits<unsigned long long>::max();
       }
       // A signed literal whose top bit is set is negative.
       const size_t width = based.hasSize_ ? based.size_ : 32;
@@ -124,6 +132,9 @@ static size_t getReplicationCount(
   }
   if (not number.sign_ and value != 0) {
     fail("the value is negative");
+  }
+  if (value > kMaxReplicationCount) {
+    fail("the count exceeds the supported maximum of 1048576 (1<<20)");
   }
   return static_cast<size_t>(value);
 }

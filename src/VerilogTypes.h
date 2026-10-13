@@ -9,7 +9,10 @@
 #include <variant>
 #include <vector>
 #include <string>
+#include <algorithm>
 #include <cassert>
+#include <limits>
+#include <stdexcept>
 
 namespace naja { namespace verilog {
 
@@ -198,7 +201,14 @@ struct Number {
   Number() = default;
   Number(const Number&) = default;
   Number(const std::string& value) {
-    value_ = static_cast<unsigned>(std::stoul(value));
+    // A decimal literal wider than 32 bits is held as the largest value, not
+    // wrapped, so a consumer that bounds it (a replication count) rejects it.
+    unsigned long long wide = std::numeric_limits<unsigned long long>::max();
+    try {
+      wide = std::stoull(value);
+    } catch (const std::out_of_range&) {}
+    value_ = static_cast<unsigned>(
+      std::min<unsigned long long>(wide, std::numeric_limits<unsigned>::max()));
   }
   Number(const std::string& size, bool isSigned, char base, const std::string& value) {
     value_ = BasedNumber(size, isSigned, base, value);
