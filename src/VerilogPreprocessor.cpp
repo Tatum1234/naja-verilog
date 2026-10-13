@@ -64,6 +64,8 @@ std::string VerilogPreprocessor::preprocessStream(
     }
 
     if (!isActive()) {
+      // Keep a line for the skipped one so a later error names its source line.
+      output << '\n';
       continue;
     }
 
@@ -99,6 +101,9 @@ bool VerilogPreprocessor::handleDirective(
   }
 
   ++idx; // skip `
+  // Every consumed directive leaves an empty line so that the lines after it
+  // keep their numbers; `include replaces this with the included text.
+  output = "\n";
   auto readToken = [&](std::string& token) {
     token.clear();
     while (idx < line.size() && (line[idx] == ' ' || line[idx] == '\t')) {
@@ -279,16 +284,38 @@ bool VerilogPreprocessor::handleDirective(
       throw VerilogException(reason.str());
     }
     includeStack_.push_back(resolved);
-    output += preprocessStream(includeFile, resolved);
+    output = preprocessStream(includeFile, resolved);
     includeStack_.pop_back();
     return true;
   }
 
-  if (keyword == "timescale") {
-    if (!isActive()) {
-      return true;
+  // Directives with no meaning for a power netlist are consumed.
+  if (keyword == "timescale" || keyword == "celldefine" ||
+      keyword == "endcelldefine" || keyword == "default_nettype") {
+    return true;
+  }
+
+  // The unconnected-drive state is handed to the parser as a line the scanner
+  // reads; `resetall restores the default, which is no drive.
+  if (keyword == "unconnected_drive") {
+    std::string pull;
+    readToken(pull);
+    if (pull != "pull0" && pull != "pull1") {
+      std::ostringstream reason;
+      reason << "Expected pull0 or pull1 after `unconnected_drive at "
+             << currentPath.string() << ":" << lineNumber;
+      throw VerilogException(reason.str());
     }
-    // Consume but do not emit to keep parser-compatible output.
+    if (isActive()) {
+      output = "`unconnected_drive " + pull + "\n";
+    }
+    return true;
+  }
+
+  if (keyword == "nounconnected_drive" || keyword == "resetall") {
+    if (isActive()) {
+      output = "`nounconnected_drive\n";
+    }
     return true;
   }
 

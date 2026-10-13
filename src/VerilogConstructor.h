@@ -57,6 +57,11 @@ class VerilogConstructor {
     }
 
     //LCOV_EXCL_START
+    //Reports `unconnected_drive pull0 (0), pull1 (1) and `nounconnected_drive /
+    //`resetall (-1) when the parser reads them, so the value in force when
+    //startModule fires is the value that governs that module
+    //(IEEE 1800-2023 22.9).
+    virtual void setUnconnectedDrive(int pull) {}
     virtual void startModule(const Identifier& id) {}
     //Simple Port declaration (only name), no range, no direction in module interface
     virtual void moduleInterfaceSimplePort(const Identifier& port) {}

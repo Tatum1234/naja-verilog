@@ -235,6 +235,8 @@ static naja::verilog::Number generateNumber(
 %token<std::string> STRING_TK
 %token<std::string> CONSTVAL_TK BASE_TK BASED_CONSTVAL_TK
 %token<std::string> UNBASED_UNSIZED_TK
+%token<int> UNCONNECTED_DRIVE_TK
+%token NOUNCONNECTED_DRIVE_TK
 %token<std::string> SIGN_TK
 
 //%left '[' ']'
@@ -294,7 +296,11 @@ source_text: list_of_descriptions
 
 list_of_descriptions: description | list_of_descriptions description;
 
-description: module_declaration;
+description
+: module_declaration
+| UNCONNECTED_DRIVE_TK { constructor->setUnconnectedDrive($1); }
+| NOUNCONNECTED_DRIVE_TK { constructor->setUnconnectedDrive(-1); }
+;
 
 identifier
   : IDENTIFIER_TK { $$ = naja::verilog::Identifier($1); }

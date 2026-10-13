@@ -28,6 +28,7 @@ set(tests
   NajaVerilogTestErrors.cpp
   NajaVerilogTestNetTypes.cpp
   NajaVerilogTestLiterals.cpp
+  NajaVerilogTestDirectives.cpp
 )
 
 add_executable(naja_verilog_tests ${tests})

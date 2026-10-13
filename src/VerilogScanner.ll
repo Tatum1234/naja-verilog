@@ -123,6 +123,10 @@ xnor        { return token::XNOR_KW; }
 buf         { return token::BUF_KW; }
 not         { return token::NOT_KW; }
 
+"`unconnected_drive pull0" { yylval->build<int>( 0 ); return token::UNCONNECTED_DRIVE_TK; }
+"`unconnected_drive pull1" { yylval->build<int>( 1 ); return token::UNCONNECTED_DRIVE_TK; }
+"`nounconnected_drive"     { return token::NOUNCONNECTED_DRIVE_TK; }
+
 {IDENTIFIER}          { yylval->build<std::string>( yytext ); return token::IDENTIFIER_TK; }
 {ESCAPED_IDENTIFIER}  {
   //if the character ending the escape identifier is '\n'
