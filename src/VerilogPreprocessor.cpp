@@ -319,6 +319,11 @@ bool VerilogPreprocessor::handleDirective(
     return true;
   }
 
+  // A macro usage that starts a line is text, not a directive.
+  if (macros_.find(keyword) != macros_.end()) {
+    return false;
+  }
+
   std::ostringstream reason;
   reason << "Unsupported preprocessor directive `" << keyword
          << " at " << currentPath.string() << ":" << lineNumber;

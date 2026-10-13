@@ -99,3 +99,14 @@ TEST(NajaVerilogTestDirectives, consumedDirectivesKeepLineNumbers) {
     EXPECT_NE(std::string::npos, std::string(e.what()).find("line 6")) << e.what();
   }
 }
+
+TEST(NajaVerilogTestDirectives, macroAtLineStartExpands) {
+  const auto path = writeText("naja_directives_macro.v",
+    "`define MOD module\n"
+    "`MOD a(input x); endmodule\n");
+  DriveRecorder constructor;
+  constructor.setPreprocessEnabled(true);
+  constructor.parse(path);
+  ASSERT_EQ(1u, constructor.started_.size());
+  EXPECT_EQ("a", constructor.started_[0].first);
+}
