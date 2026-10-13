@@ -165,7 +165,24 @@ TEST(NajaVerilogTestLiterals, badReplicationCount) {
   expectParseError(".A({4'b102{1'b1}})", "replication count");
   expectParseError(".A({4'o8{1'b1}})", "replication count");
   // Past the size cap, including a decimal that does not fit 32 bits.
-  expectParseError(".A({4294967296{1'b1}})", "replication count");
-  expectParseError(".A({99999999999999999999999{1'b1}})", "replication count");
+  expectParseError(".A({4294967296{1'b1}})", "does not fit");
+  expectParseError(".A({99999999999999999999999{1'b1}})", "does not fit");
+  expectParseError(".A({4294967295{1'b1}})", "1048576");
   expectParseError(".A({1048577{1'b1}})", "1048576");
+}
+
+TEST(NajaVerilogTestLiterals, unsizedDecimalMustFit32Bits) {
+  expectParseError(".A(4294967296)", "does not fit");
+  expectParseError(".A(4294967296)", "33'd4294967296");
+  expectParseError(".A(4294967296)", "line 2");
+  expectParseError(".A(99999999999999999999999)", "does not fit");
+  VerilogConstructorTest constructor;
+  const Expression e = connectionOf(constructor, ".A(4294967295)");
+  ASSERT_EQ(Expression::NUMBER, e.value_.index());
+  const auto& number = std::get<Number>(e.value_);
+  ASSERT_EQ(Number::UNSIGNED, number.value_.index());
+  EXPECT_EQ(4294967295u, std::get<Number::UNSIGNED>(number.value_));
+  // A sized decimal is a digit string and is unaffected.
+  VerilogConstructorTest sized;
+  EXPECT_NO_THROW(connectionOf(sized, ".A(33'd4294967296)"));
 }

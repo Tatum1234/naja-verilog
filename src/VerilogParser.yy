@@ -473,7 +473,14 @@ number
   $$ = generateNumber(true, $1, $2, $3, @$.begin.line, @$.end.line, @$.begin.column, @$.end.column);
 }
 | CONSTVAL_TK {
-  $$ = Number($1);
+  try {
+    $$ = Number($1);
+  } catch (const naja::verilog::VerilogException& e) {
+    std::ostringstream reason;
+    reason << "Parser error: " << e.what() << " at line " << @$.begin.line
+      << " col " << @$.begin.column;
+    throw naja::verilog::VerilogException(reason.str());
+  }
 }
 | UNBASED_UNSIZED_TK {
   $$ = naja::verilog::Number::unbasedUnsized($1[0]);

@@ -9,6 +9,8 @@
 #include <variant>
 #include <vector>
 #include <string>
+
+#include "VerilogException.h"
 #include <algorithm>
 #include <cassert>
 #include <limits>
@@ -200,15 +202,20 @@ struct UnbasedUnsized {
 struct Number {
   Number() = default;
   Number(const Number&) = default;
+  // An unsized decimal literal is a 32-bit unsigned number; one that does not
+  // fit is refused rather than wrapped or clamped, since either would change
+  // the bits it stands for.
   Number(const std::string& value) {
-    // A decimal literal wider than 32 bits is held as the largest value, not
-    // wrapped, so a consumer that bounds it (a replication count) rejects it.
     unsigned long long wide = std::numeric_limits<unsigned long long>::max();
     try {
       wide = std::stoull(value);
     } catch (const std::out_of_range&) {}
-    value_ = static_cast<unsigned>(
-      std::min<unsigned long long>(wide, std::numeric_limits<unsigned>::max()));
+    if (wide > std::numeric_limits<unsigned>::max()) {
+      throw VerilogException(
+        "decimal literal " + value + " does not fit the 32 bits of an unsized "
+        "number; write it with a size, e.g. 33'd" + value);
+    }
+    value_ = static_cast<unsigned>(wide);
   }
   Number(const std::string& size, bool isSigned, char base, const std::string& value) {
     value_ = BasedNumber(size, isSigned, base, value);
