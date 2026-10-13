@@ -188,6 +188,12 @@ struct BasedNumber {
   std::string digits_   {};
 };
 
+// '0, '1, 'x or 'z (IEEE 1800-2023 5.7.1): all bits of the context take the
+// value. The width belongs to the consumer, so the literal itself has none.
+struct UnbasedUnsized {
+  char value_ {'0'}; // lower case
+};
+
 struct Number {
   Number() = default;
   Number(const Number&) = default;
@@ -200,12 +206,19 @@ struct Number {
   Number(bool isSigned, char base, const std::string& value) {
     value_ = BasedNumber(isSigned, base, value);
   }
+  static Number unbasedUnsized(char value) {
+    Number number;
+    number.value_ = UnbasedUnsized{value};
+    return number;
+  }
   std::string getString() const;
   std::string getDescription() const;
+  // Returns 1 for an unbased unsized literal: its real width is the context's.
   size_t getSize() const;
   int getInt() const;
-  enum Type { BASED, UNSIGNED };
-  using Value = std::variant<BasedNumber, unsigned>;
+  bool isUnbasedUnsized() const { return value_.index() == UNBASED_UNSIZED; }
+  enum Type { BASED, UNSIGNED, UNBASED_UNSIZED };
+  using Value = std::variant<BasedNumber, unsigned, UnbasedUnsized>;
 
   bool  sign_   {true}; //true positive, false negative
   Value value_  {};

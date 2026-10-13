@@ -212,6 +212,8 @@ size_t Number::getSize() const {
       return std::get<Type::BASED>(value_).getSize();
     case Type::UNSIGNED:
       return sizeof(std::get<Type::UNSIGNED>(value_)) * 8; // size in bits
+    case Type::UNBASED_UNSIZED:
+      return 1;
   }
   return 0; //LCOV_EXCL_LINE
 }
@@ -272,6 +274,8 @@ std::string Number::getString() const {
       return std::get<Type::BASED>(value_).getString();
     case Type::UNSIGNED:
       return std::to_string(std::get<Type::UNSIGNED>(value_));
+    case Type::UNBASED_UNSIZED:
+      return std::string("'") + std::get<Type::UNBASED_UNSIZED>(value_).value_;
   }
   return std::string();
 }
@@ -287,6 +291,9 @@ std::string Number::getDescription() const {
     case Type::UNSIGNED:
       stream << "unsigned: " << std::get<Type::UNSIGNED>(value_);
       break; 
+    case Type::UNBASED_UNSIZED:
+      stream << "UnbasedUnsized: " << getString();
+      break;
   }
   return stream.str();
 }

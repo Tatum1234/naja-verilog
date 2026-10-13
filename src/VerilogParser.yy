@@ -152,6 +152,7 @@ static naja::verilog::Number generateNumber(
 %token<std::string> ESCAPED_IDENTIFIER_TK
 %token<std::string> STRING_TK
 %token<std::string> CONSTVAL_TK BASE_TK BASED_CONSTVAL_TK
+%token<std::string> UNBASED_UNSIZED_TK
 %token<std::string> SIGN_TK
 
 //%left '[' ']'
@@ -382,6 +383,9 @@ number
 | CONSTVAL_TK {
   $$ = Number($1);
 }
+| UNBASED_UNSIZED_TK {
+  $$ = naja::verilog::Number::unbasedUnsized($1[0]);
+}
 
 //hierarchical_identifier ::=
 //{ identifier [ [ constant_expression ] ] . } identifier
@@ -420,6 +424,31 @@ expression {
 }
 
 concatenation: '{' list_of_expressions '}' { $$ = $2; }
+// Replication (IEEE 1800-2023 11.4.12.1) is expanded here into `count` copies
+// of the inner operands, so consumers see only ordinary concatenations.
+// The standard also allows a zero count inside a concatenation that has a
+// positive-size operand; this parser rejects it, as it does any count it
+// cannot evaluate to a positive integer literal.
+| '{' expression concatenation '}' {
+  if ($2.value_.index() != naja::verilog::Expression::NUMBER
+      or std::get<naja::verilog::Number>($2.value_).value_.index()
+         != naja::verilog::Number::UNSIGNED
+      or std::get<naja::verilog::Number::UNSIGNED>(
+           std::get<naja::verilog::Number>($2.value_).value_) == 0) {
+    std::ostringstream reason;
+    reason << "Parser error: replication count must be a positive constant "
+      << "integer literal, got '" << $2.getString() << "'"
+      << " at line " << @$.begin.line << " col " << @$.begin.column;
+    throw naja::verilog::VerilogException(reason.str());
+  }
+  const unsigned count = std::get<naja::verilog::Number::UNSIGNED>(
+    std::get<naja::verilog::Number>($2.value_).value_);
+  $$.clear();
+  $$.reserve($3.size() * count);
+  for (unsigned i = 0; i < count; ++i) {
+    $$.insert($$.end(), $3.begin(), $3.end());
+  }
+}
 
 expression: primary { $$ = $1; }
 

@@ -6,6 +6,7 @@
 
 %{
 /* C++ string header, for string ops below */
+#include <cctype>
 #include <string>
 #include <sstream>
 
@@ -144,6 +145,12 @@ not         { return token::NOT_KW; }
   //we don't need the "'" first character and we are sure that yytext is 's?b|o|...
 	yylval->build<std::string>(yytext+1);
 	return token::BASE_TK;
+}
+
+\'[01xXzZ] {
+  // The apostrophe must touch the digit (IEEE 1800-2023 5.7.1).
+  yylval->build<std::string>(std::string(1, static_cast<char>(std::tolower(yytext[1]))));
+  return token::UNBASED_UNSIZED_TK;
 }
 
 <based_const>[0-9a-fA-FzxZX?][0-9a-fA-FzxZX?_]* {
