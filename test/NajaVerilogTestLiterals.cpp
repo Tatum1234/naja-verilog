@@ -186,3 +186,16 @@ TEST(NajaVerilogTestLiterals, unsizedDecimalMustFit32Bits) {
   VerilogConstructorTest sized;
   EXPECT_NO_THROW(connectionOf(sized, ".A(33'd4294967296)"));
 }
+
+TEST(NajaVerilogTestLiterals, underscoreInUnsizedDecimal) {
+  VerilogConstructorTest constructor;
+  const Expression e = connectionOf(constructor, ".A(1_000)");
+  ASSERT_EQ(Expression::NUMBER, e.value_.index());
+  const auto& number = std::get<Number>(e.value_);
+  ASSERT_EQ(Number::UNSIGNED, number.value_.index());
+  EXPECT_EQ(1000u, std::get<Number::UNSIGNED>(number.value_));
+  VerilogConstructorTest replicated;
+  const Expression r = connectionOf(replicated, ".A({1_0{1'b1}})");
+  EXPECT_EQ(10u, asConcat(r).expressions_.size());
+  expectParseError(".A(4_294_967_296)", "4294967296");
+}

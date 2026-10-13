@@ -204,8 +204,14 @@ struct Number {
   Number(const Number&) = default;
   // An unsized decimal literal is a 32-bit unsigned number; one that does not
   // fit is refused rather than wrapped or clamped, since either would change
-  // the bits it stands for.
-  Number(const std::string& value) {
+  // the bits it stands for. Underscores are digit separators (IEEE 1800-2023
+  // 5.7.1) and are dropped before conversion, which would otherwise stop at
+  // the first one.
+  Number(const std::string& text) {
+    std::string value;
+    for (char c: text) {
+      if (c != '_') value += c;
+    }
     unsigned long long wide = std::numeric_limits<unsigned long long>::max();
     try {
       wide = std::stoull(value);
