@@ -99,7 +99,8 @@ struct Net {
   class Type {
     public:
       enum TypeEnum {
-        Wire, Supply0, Supply1, Unknown
+        Wire, Tri, Tri0, Tri1, Supply0, Supply1, WAnd, WOr,
+        TriAnd, TriOr, TriReg, UWire, Unknown
       };
       Type() = default;
       Type(const TypeEnum& dirEnum);

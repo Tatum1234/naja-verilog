@@ -78,6 +78,15 @@ std::string Net::Type::getString() const {
     case Type::Supply0: return "Supply0";
     case Type::Supply1: return "Supply1";
     case Type::Wire: return "Wire";
+    case Type::Tri: return "Tri";
+    case Type::Tri0: return "Tri0";
+    case Type::Tri1: return "Tri1";
+    case Type::WAnd: return "WAnd";
+    case Type::WOr: return "WOr";
+    case Type::TriAnd: return "TriAnd";
+    case Type::TriOr: return "TriOr";
+    case Type::TriReg: return "TriReg";
+    case Type::UWire: return "UWire";
     case Type::Unknown: return "Unknown";
   }
   return "Error";

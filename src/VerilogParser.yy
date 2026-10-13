@@ -126,6 +126,15 @@ static naja::verilog::Number generateNumber(
 %token SUPPLY0_KW
 %token SUPPLY1_KW
 %token WIRE_KW
+%token TRI_KW
+%token TRI0_KW
+%token TRI1_KW
+%token WAND_KW
+%token WOR_KW
+%token TRIAND_KW
+%token TRIOR_KW
+%token TRIREG_KW
+%token UWIRE_KW
 %token ASSIGN_KW
 %token DEFPARAM_KW
 %token END 0 "end of file"
@@ -155,10 +164,10 @@ static naja::verilog::Number generateNumber(
 %type<naja::verilog::Identifier> name_of_module_instance;
 %type<naja::verilog::Identifier> parameter_identifier;
 
-%type<naja::verilog::Port> port_declaration
 %type<naja::verilog::Ports> internal_ports_declaration
 %type<naja::verilog::Port::Direction> port_type_io
 %type<naja::verilog::Net::Type> net_type;
+%type<naja::verilog::Net::Type> net_type.opt;
 %type<naja::verilog::Range> range;
 %type<naja::verilog::Range> range.opt
 %type<naja::verilog::Range> constant_range_expression.opt;
@@ -254,14 +263,12 @@ range: '[' constant_expression ':' constant_expression ']' {
 
 range.opt: %empty { $$.valid_ = false; } | range { $$ = $1; }
 
-port_declaration: list_of_attribute_instance.opt port_type_io range.opt identifier {
-  $$ = Port($4, $2, $3);
-}
+net_type.opt: %empty { $$ = naja::verilog::Net::Type::Unknown; } | net_type { $$ = $1; }
 
-internal_ports_declaration: list_of_attribute_instance.opt port_type_io range.opt list_of_identifiers {
+internal_ports_declaration: list_of_attribute_instance.opt port_type_io net_type.opt range.opt list_of_identifiers {
   constructor->setCurrentLocation(@$.begin.line, @$.begin.column);
-  for (auto portIdentifier: $4) {
-    constructor->internalModuleImplementationPort(Port(portIdentifier, $2, $3));
+  for (auto portIdentifier: $5) {
+    constructor->internalModuleImplementationPort(Port(portIdentifier, $2, $4), $3);
   }
 }
 
@@ -349,6 +356,15 @@ net_type
 : SUPPLY0_KW { $$ = naja::verilog::Net::Type::Supply0; }
 | SUPPLY1_KW { $$ = naja::verilog::Net::Type::Supply1; }
 | WIRE_KW    { $$ = naja::verilog::Net::Type::Wire; }
+| TRI_KW     { $$ = naja::verilog::Net::Type::Tri; }
+| TRI0_KW    { $$ = naja::verilog::Net::Type::Tri0; }
+| TRI1_KW    { $$ = naja::verilog::Net::Type::Tri1; }
+| WAND_KW    { $$ = naja::verilog::Net::Type::WAnd; }
+| WOR_KW     { $$ = naja::verilog::Net::Type::WOr; }
+| TRIAND_KW  { $$ = naja::verilog::Net::Type::TriAnd; }
+| TRIOR_KW   { $$ = naja::verilog::Net::Type::TriOr; }
+| TRIREG_KW  { $$ = naja::verilog::Net::Type::TriReg; }
+| UWIRE_KW   { $$ = naja::verilog::Net::Type::UWire; }
 ;
 
 list_of_module_instances
@@ -486,9 +502,9 @@ list_of_module_items.opt: %empty | list_of_module_items;
 
 /* A.1.2 */
 module_arg
-: port_declaration {
+: list_of_attribute_instance.opt port_type_io net_type.opt range.opt identifier {
   constructor->setCurrentLocation(@$.begin.line, @$.begin.column);
-  constructor->internalModuleInterfaceCompletePort($1);
+  constructor->internalModuleInterfaceCompletePort(Port($5, $2, $4), $3);
 }
 | port;
 

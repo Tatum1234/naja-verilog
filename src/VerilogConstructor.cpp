@@ -136,12 +136,17 @@ void VerilogConstructor::internalModuleInterfaceSimplePort(const naja::verilog::
   }
   if (type_ == ModuleInterfaceType::PortDeclaration) {
     moduleInterfaceCompletePort(Port(id, lastDirection_, lastRange_));
+    // The net type of an ANSI port declaration carries over to the ports
+    // that follow it without a direction (IEEE 1800-2023 §23.2.2).
+    if (lastNetType_ != Net::Type::Unknown) {
+      addPortNetType(id, lastNetType_);
+    }
   } else {
     moduleInterfaceSimplePort(id);
   }
 }
   
-void VerilogConstructor::internalModuleInterfaceCompletePort(const Port& port) {
+void VerilogConstructor::internalModuleInterfaceCompletePort(const Port& port, const Net::Type& netType) {
   if (type_ == ModuleInterfaceType::Unknown) {
     type_ = ModuleInterfaceType::PortDeclaration;
   }
@@ -150,11 +155,18 @@ void VerilogConstructor::internalModuleInterfaceCompletePort(const Port& port) {
   }
   lastDirection_ = port.direction_;
   lastRange_ = port.range_; 
+  lastNetType_ = netType;
   moduleInterfaceCompletePort(port);
+  if (netType != Net::Type::Unknown) {
+    addPortNetType(port.identifier_, netType);
+  }
 }
 
-void VerilogConstructor::internalModuleImplementationPort(const Port& port) {
+void VerilogConstructor::internalModuleImplementationPort(const Port& port, const Net::Type& netType) {
   moduleImplementationPort(port);
+  if (netType != Net::Type::Unknown) {
+    addPortNetType(port.identifier_, netType);
+  }
 }
 
 }} // namespace verilog // namespace naja

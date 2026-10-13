@@ -102,6 +102,15 @@ inout       { return token::INOUT_KW; }
 wire        { return token::WIRE_KW; }
 supply0     { return token::SUPPLY0_KW; }
 supply1     { return token::SUPPLY1_KW; }
+tri         { return token::TRI_KW; }
+tri0        { return token::TRI0_KW; }
+tri1        { return token::TRI1_KW; }
+wand        { return token::WAND_KW; }
+wor         { return token::WOR_KW; }
+triand      { return token::TRIAND_KW; }
+trior       { return token::TRIOR_KW; }
+trireg      { return token::TRIREG_KW; }
+uwire       { return token::UWIRE_KW; }
 assign      { return token::ASSIGN_KW; }
 defparam    { return token::DEFPARAM_KW; }
 and         { return token::AND_KW; }

@@ -64,6 +64,8 @@ class VerilogConstructor {
     virtual void moduleInterfaceCompletePort(const Port& port) {}
     virtual void moduleImplementationPort(const Port& port) {}
     virtual void addNet(const Net& net) {}
+    //Net type written in a port declaration (input tri1 a): called right after the port callback
+    virtual void addPortNetType(const Identifier& port, const Net::Type& type) {}
     virtual void addAssign(const RangeIdentifiers& identifiers, const Expression& expression) {}
     virtual void startInstantiation(const Identifier& model) {}
     virtual void addInstanceConnection(const Identifier& port, const Expression& expression) {}
@@ -101,12 +103,13 @@ class VerilogConstructor {
     void internalStartModule(const Identifier& id);
     void internalEndModule();
     void internalModuleInterfaceSimplePort(const Identifier& id);
-    void internalModuleInterfaceCompletePort(const Port& port);
-    void internalModuleImplementationPort(const Port& port);
+    void internalModuleInterfaceCompletePort(const Port& port, const Net::Type& netType);
+    void internalModuleImplementationPort(const Port& port, const Net::Type& netType);
 
     ModuleInterfaceType type_           {ModuleInterfaceType::Unknown};
     Port::Direction     lastDirection_  {Port::Direction::Unknown};
     Range               lastRange_      {};
+    Net::Type           lastNetType_    {Net::Type::Unknown};
     
     VerilogScanner*       scanner_      {nullptr};
     VerilogParser*        parser_       {nullptr};
